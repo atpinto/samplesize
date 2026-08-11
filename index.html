@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trial Power Studio — sample size &amp; power for clinical trials</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --canvas:#242B39;
+  --panel:#2B3242;
+  --panel-soft:#232937;
+  --ink:#E6EBF5;
+  --ink-soft:#B9C2D4;
+  --muted:#8791A6;
+  --line:#3A4254;
+  --line-strong:#4C5670;
+  --ctrl:#79C9EC;          /* control group — cyan */
+  --trt:#6CC7E8;           /* primary accent — cyan */
+  --trt-deep:#49A9D1;
+  --accent:#EEBD6A;        /* amber, treatment/highlights */
+  --danger:#EC8F7C;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  --r:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  font-family:var(--sans);color:var(--ink);background:var(--canvas);
+  background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+  background-size:30px 30px;
+  min-height:100vh;font-size:15px;line-height:1.45;
+}
+a{color:#8FD6F2}
+
+/* ---------- shell ---------- */
+.shell{max-width:1280px;margin:0 auto;padding:20px 20px 60px}
+header.masthead{
+  display:flex;align-items:baseline;justify-content:space-between;gap:16px;
+  padding:14px 4px 18px;flex-wrap:wrap;
+}
+.brand{display:flex;align-items:baseline;gap:12px}
+.brand h1{font-family:var(--serif);font-weight:600;font-size:26px;letter-spacing:-.01em}
+.brand h1 em{font-style:italic;color:var(--trt)}
+.brand .rule{width:34px;height:3px;background:linear-gradient(90deg,var(--ctrl),var(--accent));border-radius:2px;align-self:center}
+.masthead .tag{color:var(--muted);font-size:13.5px}
+
+.layout{display:grid;grid-template-columns:216px minmax(0,1fr);gap:18px}
+@media (max-width:960px){.layout{grid-template-columns:1fr}}
+
+/* ---------- outcome nav ---------- */
+nav.outcomes{display:flex;flex-direction:column;gap:8px;position:sticky;top:16px;align-self:start}
+@media (max-width:960px){
+  nav.outcomes{flex-direction:row;overflow-x:auto;position:static;padding-bottom:4px}
+  nav.outcomes .tab{min-width:150px}
+}
+.tab{
+  display:flex;align-items:center;gap:11px;text-align:left;
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:11px 13px;cursor:pointer;font:inherit;color:var(--ink-soft);
+  transition:border-color .15s, box-shadow .15s, transform .15s;
+}
+.tab:hover{border-color:var(--line-strong)}
+.tab:focus-visible{outline:2px solid var(--trt);outline-offset:2px}
+.tab.active{border-color:var(--trt);box-shadow:0 0 0 1px var(--trt), 0 6px 16px -8px rgba(108,199,232,.35);color:var(--ink)}
+.tab .glyph{flex:none;width:34px;height:34px;border-radius:9px;background:var(--panel-soft);display:grid;place-items:center;border:1px solid var(--line)}
+.tab.active .glyph{background:rgba(108,199,232,.12);border-color:rgba(108,199,232,.4)}
+.tab .t-name{font-weight:600;font-size:13.5px;line-height:1.2}
+.tab .t-sub{font-size:11px;color:var(--muted);margin-top:1px}
+
+/* ---------- cards ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 2px 6px rgba(0,0,0,.28)}
+.card h2{
+  font-family:var(--serif);font-size:16px;font-weight:600;letter-spacing:.01em;
+  padding:14px 18px 12px;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:10px;
+}
+.card h2 .k{font-family:var(--mono);font-size:10.5px;font-weight:500;color:var(--muted);letter-spacing:.14em;text-transform:uppercase}
+.main{display:grid;grid-template-columns:340px minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:1120px){.main{grid-template-columns:1fr}}
+
+/* ---------- form ---------- */
+.form-body{padding:14px 18px 18px;display:flex;flex-direction:column;gap:13px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:12.5px;font-weight:600;color:var(--ink-soft);display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.field label .hint{font-weight:400;color:var(--muted);font-size:11.5px}
+.field input[type=number], .field select{
+  font:inherit;font-family:var(--mono);font-size:14px;
+  padding:8px 10px;border:1px solid var(--line-strong);border-radius:9px;background:var(--panel-soft);color:var(--ink);
+  width:100%;
+}
+.field input:focus, .field select:focus{outline:2px solid rgba(108,199,232,.55);outline-offset:1px;border-color:var(--trt)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seg{display:flex;background:var(--panel-soft);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.seg button{
+  flex:1;font:inherit;font-size:12.5px;font-weight:600;color:var(--muted);
+  background:transparent;border:0;border-radius:8px;padding:7px 6px;cursor:pointer;
+}
+.seg button.on{background:#414C66;color:var(--ink)}
+.seg button:focus-visible{outline:2px solid var(--trt);outline-offset:1px}
+.seg.method button.on{background:var(--trt-deep);color:#0D1826}
+fieldset.grp{border:1px dashed var(--line-strong);border-radius:11px;padding:11px 12px 12px;display:flex;flex-direction:column;gap:11px}
+fieldset.grp legend{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:0 6px}
+fieldset.grp.cov{border-color:rgba(108,199,232,.4);background:rgba(108,199,232,.06)}
+.switch-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.switch-row .lab{font-size:13px;font-weight:600;color:var(--ink-soft)}
+.switch{position:relative;width:40px;height:22px;flex:none}
+.switch input{position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0}
+.switch .trk{position:absolute;inset:0;background:var(--line-strong);border-radius:999px;transition:background .15s}
+.switch .trk::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.switch input:checked + .trk{background:var(--trt)}
+.switch input:checked + .trk::after{transform:translateX(18px)}
+.switch input:focus-visible + .trk{outline:2px solid var(--trt);outline-offset:2px}
+.rho-wrap{display:flex;align-items:center;gap:10px}
+.rho-wrap input[type=range]{flex:1;accent-color:var(--trt)}
+.rho-val{font-family:var(--mono);font-size:13px;min-width:44px;text-align:right}
+button.run{
+  font:inherit;font-weight:700;font-size:14.5px;letter-spacing:.01em;
+  background:linear-gradient(180deg,var(--trt),var(--trt-deep));color:#0C1723;border:0;border-radius:11px;
+  padding:12px;cursor:pointer;box-shadow:0 6px 14px -6px rgba(73,169,209,.55);
+  transition:transform .12s, box-shadow .12s;
+}
+button.run:hover{transform:translateY(-1px)}
+button.run:active{transform:translateY(0)}
+button.run:disabled{opacity:.55;cursor:wait;transform:none}
+button.run:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.progress{height:6px;border-radius:99px;background:var(--panel-soft);border:1px solid var(--line);overflow:hidden;display:none}
+.progress.on{display:block}
+.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--trt),var(--accent));transition:width .1s}
+.err{display:none;color:var(--danger);background:rgba(236,143,124,.1);border:1px solid rgba(236,143,124,.35);border-radius:9px;padding:9px 11px;font-size:13px}
+.err.on{display:block}
+
+/* ---------- results ---------- */
+.results{display:flex;flex-direction:column;gap:18px}
+.res-empty{padding:44px 24px;text-align:center;color:var(--muted)}
+.res-empty .big{font-family:var(--serif);font-size:19px;color:var(--ink-soft);margin-bottom:6px}
+.headline{display:grid;grid-template-columns:auto 1fr;gap:0;align-items:stretch}
+@media (max-width:680px){.headline{grid-template-columns:1fr}}
+.n-block{
+  padding:20px 26px;border-right:1px solid var(--line);
+  display:flex;flex-direction:column;justify-content:center;min-width:225px;
+}
+@media (max-width:680px){.n-block{border-right:0;border-bottom:1px solid var(--line)}}
+.n-block .lab{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.n-block .N{font-family:var(--serif);font-size:56px;line-height:1.05;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.n-block .N .nsym{font-style:italic;font-size:30px;color:var(--muted);margin-right:6px}
+.n-block .after{font-size:12.5px;color:var(--muted);margin-top:4px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:0}
+.stat{padding:15px 18px;border-left:1px solid var(--line);border-top:1px solid var(--line)}
+.stat:nth-child(-n+3){border-top:0}
+@media (max-width:680px){.stat{border-left:0}}
+.stat .lab{font-size:10.5px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.stat .val{font-family:var(--serif);font-size:22px;font-variant-numeric:tabular-nums}
+.stat .val small{font-size:12.5px;color:var(--muted);font-family:var(--sans)}
+.stat .val.ctrl{color:var(--ctrl)} .stat .val.trt{color:var(--accent)}
+.formula-strip{
+  font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);
+  background:var(--panel-soft);border-top:1px solid var(--line);
+  padding:10px 18px;overflow-x:auto;white-space:nowrap;border-radius:0 0 var(--r) var(--r);
+}
+.formula-strip b{color:#8FD6F2;font-weight:700}
+.chart-card .chart-box{padding:12px 16px 6px;height:315px;position:relative}
+.chart-note{padding:2px 18px 13px;font-size:12px;color:var(--muted)}
+.cov-card .cov-body{padding:16px 18px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:18px;align-items:center}
+@media (max-width:680px){.cov-card .cov-body{grid-template-columns:1fr}}
+.cov-chart-box{height:190px;position:relative}
+.cov-read{font-size:13.5px;color:var(--ink-soft)}
+.cov-read .delta{font-family:var(--serif);font-size:30px;color:var(--accent)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;padding:0 18px 12px;font-size:12px;color:var(--muted)}
+.legend .sw{display:inline-block;width:20px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+details.methods{border-top:1px solid var(--line)}
+details.methods summary{
+  cursor:pointer;padding:12px 18px;font-size:13px;font-weight:600;color:var(--ink-soft);
+  list-style:none;display:flex;align-items:center;gap:8px;
+}
+details.methods summary::-webkit-details-marker{display:none}
+details.methods summary::before{content:"▸";color:var(--muted);transition:transform .15s}
+details.methods[open] summary::before{transform:rotate(90deg)}
+details.methods .m-body{padding:0 18px 16px;font-size:13px;color:var(--ink-soft);display:flex;flex-direction:column;gap:8px;max-width:70ch}
+details.methods code{font-family:var(--mono);font-size:12px;background:var(--panel-soft);padding:1px 5px;border-radius:5px;border:1px solid var(--line)}
+.warn-note{margin:0 18px 14px;padding:9px 12px;border-radius:9px;background:rgba(238,189,106,.1);border:1px solid rgba(238,189,106,.35);color:#E9CD97;font-size:12.5px;display:none}
+.warn-note.on{display:block}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="masthead">
+    <div class="brand">
+      <h1>Trial <em>Power</em> Studio</h1><span class="rule" aria-hidden="true"></span>
+    </div>
+    <div class="tag">Sample size &amp; power for randomised trials — closed-form or Monte-Carlo, with baseline-covariate adjustment</div>
+  </header>
+
+  <div class="layout">
+    <nav class="outcomes" id="nav" aria-label="Outcome type"></nav>
+    <div class="main">
+      <section class="card" aria-label="Design parameters">
+        <h2><span class="k">Inputs</span><span id="panelTitle">Design</span></h2>
+        <div class="form-body" id="form"></div>
+      </section>
+      <section class="results" id="results">
+        <div class="card"><div class="res-empty">
+          <div class="big">Set the design, then press Calculate.</div>
+          Formula mode gives the closed-form answer instantly; simulation mode estimates power by Monte-Carlo and can add a correlated baseline covariate to the analysis.
+        </div></div>
+      </section>
+    </div>
+  </div>
+</div>
+<script>
+/* ================= math utilities ================= */
+function qnorm(p){ // Acklam inverse normal CDF
+  if(p<=0) return -Infinity; if(p>=1) return Infinity;
+  const a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00],
+        b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01],
+        c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00],
+        d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00];
+  const pl=0.02425;let q,r;
+  if(p<pl){q=Math.sqrt(-2*Math.log(p));return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+  if(p<=1-pl){q=p-0.5;r=q*q;return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);}
+  q=Math.sqrt(-2*Math.log(1-p));return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+}
+function pnorm(z){
+  if(z<-8)return 0; if(z>8)return 1;
+  const x=Math.abs(z)/Math.SQRT2, t=1/(1+0.3275911*x);
+  const y=t*(0.254829592+t*(-0.284496736+t*(1.421413741+t*(-1.453152027+t*1.061405429))))*Math.exp(-x*x);
+  return z>=0?1-0.5*y:0.5*y;
+}
+function tinv(p,df){ // Cornish-Fisher expansion of Student-t quantile
+  if(df>2000) return qnorm(p);
+  const z=qnorm(p),z2=z*z,z3=z2*z,z5=z3*z2,z7=z5*z2,z9=z7*z2;
+  return z+(z3+z)/(4*df)+(5*z5+16*z3+3*z)/(96*df*df)+(3*z7+19*z5+17*z3-15*z)/(384*df**3)
+        +(79*z9+776*z7+1482*z5-1920*z3-945*z)/(92160*df**4);
+}
+function mulberry32(seed){let a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function makeRng(seed){
+  const u=mulberry32(seed); let spare=null;
+  return {
+    unif:()=>u()||1e-12,
+    norm:function(){ if(spare!==null){const s=spare;spare=null;return s;}
+      let a=u()||1e-12,b=u();const R=Math.sqrt(-2*Math.log(a));
+      spare=R*Math.sin(2*Math.PI*b); return R*Math.cos(2*Math.PI*b); },
+    pois:function(m){ if(m<=0)return 0;
+      if(m<30){const L=Math.exp(-m);let k=0,p=1;do{k++;p*=u();}while(p>L);return k-1;}
+      return Math.max(0,Math.round(m+Math.sqrt(m)*this.norm()));},
+    gamma:function(shape){ // Marsaglia-Tsang, mean = shape
+      if(shape<1){return this.gamma(shape+1)*Math.pow(u()||1e-12,1/shape);}
+      const d=shape-1/3,c=1/Math.sqrt(9*d);
+      for(;;){let x,v;do{x=this.norm();v=1+c*x;}while(v<=0);
+        v=v*v*v;const uu=u()||1e-12;
+        if(Math.log(uu)<0.5*x*x+d-d*v+d*Math.log(v))return d*v;}
+    }
+  };
+}
+const fmt=(x,d=3)=>!isFinite(x)?"—":(Math.abs(x)>=100?x.toFixed(Math.max(0,d-2)):x.toFixed(d));
+const pct=(x,d=1)=>(100*x).toFixed(d)+"%";
+
+/* ================= shared design helpers ================= */
+function zAlpha(P){ return P.design==="ni" ? qnorm(1-P.alpha) : qnorm(1-P.alpha/2); }
+function ceilPair(n1,r){ n1=Math.max(2,Math.ceil(n1)); const n2=Math.max(2,Math.ceil(n1*r)); return {n1,n2,N:n1+n2}; }
+function solveNGeneric(P,powerFn){ // monotone search on n1
+  let lo=2, hi=4;
+  while(powerFn(hi,P)<P.targetPower && hi<4e6) hi*=2;
+  if(hi>=4e6) return null;
+  for(let i=0;i<60;i++){const mid=(lo+hi)/2; (powerFn(mid,P)<P.targetPower)?lo=mid:hi=mid;}
+  return hi;
+}
+
+/* ================= analytic power per outcome (n1 = control arm size) ================= */
+function powContinuous(n1,P){
+  const n2=n1*P.ratio, za=zAlpha(P);
+  const eff=P.design==="ni"?(P.mu2-P.mu1)+P.margin:Math.abs(P.mu2-P.mu1);
+  const sd=P.covAnalytic?P.sd*Math.sqrt(1-P.rho*P.rho):P.sd;
+  if(eff<=0)return 0;
+  return pnorm(eff/(sd*Math.sqrt(1/n1+1/n2))-za);
+}
+function powBinary(n1,P){
+  const n2=n1*P.ratio, za=zAlpha(P), p1=P.p1,p2=P.p2,q1=1-p1,q2=1-p2;
+  if(P.design==="ni"){
+    const eff=(p2-p1)+P.margin; if(eff<=0)return 0;
+    return pnorm(eff/Math.sqrt(p1*q1/n1+p2*q2/n2)-za);
+  }
+  const pb=(n1*p1+n2*p2)/(n1+n2), qb=1-pb, d=Math.abs(p1-p2);
+  return pnorm((d-za*Math.sqrt(pb*qb*(1/n1+1/n2)))/Math.sqrt(p1*q1/n1+p2*q2/n2));
+}
+function powOR(n1,P){
+  const n2=n1*P.ratio, za=zAlpha(P), p1=P.p1, p2=P.p2;
+  const se=Math.sqrt(1/(n1*p1*(1-p1))+1/(n2*p2*(1-p2)));
+  return pnorm(Math.abs(Math.log(P.or))/se-za);
+}
+function hrEventProb(lam,a,f){ if(lam<=0)return 0; return 1-(Math.exp(-lam*f)-Math.exp(-lam*(a+f)))/(lam*a); }
+function powHR(n1,P){
+  const n2=n1*P.ratio, za=zAlpha(P);
+  const l1=Math.LN2/P.med1, l2=l1*P.hr;
+  const D=n1*hrEventProb(l1,P.acc,P.fup)+n2*hrEventProb(l2,P.acc,P.fup);
+  const pi1=n1/(n1+n2), pi2=1-pi1;
+  return pnorm(Math.abs(Math.log(P.hr))*Math.sqrt(D*pi1*pi2)-za);
+}
+function rmstMu(lam,tau){ return (1-Math.exp(-lam*tau))/lam; }
+function rmstAsyVar(lam,tau,a,f){ // Var of sqrt(n)*(muhat-mu), exponential + uniform accrual censoring
+  const M=800,h=tau/M; let v=0;
+  const S=t=>Math.exp(-lam*t);
+  const m=t=>(Math.exp(-lam*t)-Math.exp(-lam*tau))/lam;
+  const G=t=>t<=f?1:(t>=a+f?0:(a+f-t)/a);
+  for(let i=0;i<M;i++){const t=(i+0.5)*h,g=G(t); if(g<=0)continue;
+    v+=m(t)*m(t)*lam/(S(t)*g)*h;}
+  return v;
+}
+function powRMST(n1,P){
+  const n2=n1*P.ratio, za=zAlpha(P);
+  const l1=Math.LN2/P.med1, l2=Math.LN2/P.med2;
+  const d=Math.abs(rmstMu(l2,P.tau)-rmstMu(l1,P.tau));
+  const v1=rmstAsyVar(l1,P.tau,P.acc,P.fup), v2=rmstAsyVar(l2,P.tau,P.acc,P.fup);
+  if(d<=0)return 0;
+  return pnorm(d/Math.sqrt(v1/n1+v2/n2)-za);
+}
+function powCount(n1,P){
+  const n2=n1*P.ratio, za=zAlpha(P);
+  const l1=P.rate0,l2=P.rate0*P.rr,t=P.expo,k=P.disp;
+  const v1=1/(l1*t)+k, v2=1/(l2*t)+k;
+  return pnorm(Math.abs(Math.log(P.rr))/Math.sqrt(v1/n1+v2/n2)-za);
+}
+
+/* ================= small linear algebra ================= */
+function solve3(A,b){ // 3x3 gaussian elimination with partial pivot
+  const M=[[...A[0],b[0]],[...A[1],b[1]],[...A[2],b[2]]];
+  for(let c=0;c<3;c++){
+    let p=c;for(let r=c+1;r<3;r++)if(Math.abs(M[r][c])>Math.abs(M[p][c]))p=r;
+    if(Math.abs(M[p][c])<1e-12)return null;
+    [M[c],M[p]]=[M[p],M[c]];
+    for(let r=0;r<3;r++){if(r===c)continue;const fct=M[r][c]/M[c][c];
+      for(let cc=c;cc<4;cc++)M[r][cc]-=fct*M[c][cc];}
+  }
+  return [M[0][3]/M[0][0],M[1][3]/M[1][1],M[2][3]/M[2][2]];
+}
+function inv3diag(A){ // diagonal of inverse of sym 3x3
+  const [a,b,c]=A[0],[d,e,f]=[A[1][1],A[1][2],A[2][2]];
+  const det=a*(d*f-e*e)-b*(b*f-e*c)+c*(b*e-d*c);
+  if(Math.abs(det)<1e-12)return null;
+  return [(d*f-e*e)/det,(a*f-c*c)/det,(a*d-b*b)/det];
+}
+function olsTest(y,g,x,n,P){ // fit y~1+g+x, return {tU:null,tA} style: t stat for g and df
+  let s1=n,sg=0,sx=0,sgg=0,sgx=0,sxx=0,sy=0,sgy=0,sxy=0;
+  for(let i=0;i<n;i++){sg+=g[i];sx+=x[i];sgg+=g[i]*g[i];sgx+=g[i]*x[i];sxx+=x[i]*x[i];
+    sy+=y[i];sgy+=g[i]*y[i];sxy+=x[i]*y[i];}
+  const A=[[s1,sg,sx],[sg,sgg,sgx],[sx,sgx,sxx]];
+  const beta=solve3(A,[sy,sgy,sxy]); if(!beta)return null;
+  let rss=0;for(let i=0;i<n;i++){const e=y[i]-beta[0]-beta[1]*g[i]-beta[2]*x[i];rss+=e*e;}
+  const df=n-3,s2=rss/df,dinv=inv3diag(A); if(!dinv)return null;
+  return {b:beta[1],se:Math.sqrt(s2*dinv[1]),df};
+}
+function logisticTest(y,g,x,n){ // IRLS y~1+g+x, Wald on g
+  let b0=0,b1=0,b2=0;
+  for(let it=0;it<12;it++){
+    let S=[[0,0,0],[0,0,0],[0,0,0]],U=[0,0,0];
+    for(let i=0;i<n;i++){
+      const eta=b0+b1*g[i]+b2*x[i];
+      const p=1/(1+Math.exp(-Math.max(-30,Math.min(30,eta))));
+      const w=Math.max(p*(1-p),1e-10), r=y[i]-p;
+      const v=[1,g[i],x[i]];
+      for(let a2=0;a2<3;a2++){U[a2]+=r*v[a2];for(let c2=a2;c2<3;c2++)S[a2][c2]+=w*v[a2]*v[c2];}
+    }
+    S[1][0]=S[0][1];S[2][0]=S[0][2];S[2][1]=S[1][2];
+    const d=solve3(S,U); if(!d)return null;
+    b0+=d[0];b1+=d[1];b2+=d[2];
+    if(Math.abs(b1)>15)return null; // separation guard
+    if(Math.abs(d[0])+Math.abs(d[1])+Math.abs(d[2])<1e-8){
+      const dinv=inv3diag(S); if(!dinv)return null;
+      return {z:b1/Math.sqrt(dinv[1])};
+    }
+    if(it===11){const dinv=inv3diag(S);if(!dinv)return null;return {z:b1/Math.sqrt(dinv[1])};}
+  }
+  return null;
+}
+/* log-rank + Cox (Breslow ties) */
+function logrank(time,status,grp,n){
+  const idx=Array.from({length:n},(_,i)=>i).sort((a,b)=>time[a]-time[b]);
+  let atRisk=n,atRisk1=0;
+  for(let i=0;i<n;i++)if(grp[i]===1)atRisk1++;
+  let O=0,E=0,V=0,i=0;
+  while(i<n){
+    const t=time[idx[i]];let d=0,d1=0,rem=0,rem1=0,j=i;
+    while(j<n&&time[idx[j]]===t){const s=idx[j];
+      if(status[s]){d++;if(grp[s]===1)d1++;}
+      rem++;if(grp[s]===1)rem1++;j++;}
+    if(d>0&&atRisk>1){
+      const f=atRisk1/atRisk;
+      O+=d1;E+=d*f;V+=d*f*(1-f)*(atRisk-d)/(atRisk-1);
+    }
+    atRisk-=rem;atRisk1-=rem1;i=j;
+  }
+  return V>0?(O-E)/Math.sqrt(V):0;
+}
+function coxFit2(time,status,x1,x2,n){ // Newton-Raphson, covariates (x1=arm, x2=baseline)
+  const idx=Array.from({length:n},(_,i)=>i).sort((a,b)=>time[a]-time[b]);
+  let b1=0,b2=0;
+  for(let it=0;it<20;it++){
+    let s0=0,s1a=0,s1b=0,s2aa=0,s2ab=0,s2bb=0;
+    let U1=0,U2=0,I11=0,I12=0,I22=0;
+    let i=n-1;
+    while(i>=0){
+      const t=time[idx[i]];let j=i;
+      while(j>=0&&time[idx[j]]===t){ // add ties into risk set first
+        const s=idx[j],e=Math.exp(Math.max(-30,Math.min(30,b1*x1[s]+b2*x2[s])));
+        s0+=e;s1a+=x1[s]*e;s1b+=x2[s]*e;
+        s2aa+=x1[s]*x1[s]*e;s2ab+=x1[s]*x2[s]*e;s2bb+=x2[s]*x2[s]*e;j--;
+      }
+      for(let k2=i;k2>j;k2--){const s=idx[k2];
+        if(status[s]&&s0>0){
+          const m1=s1a/s0,m2=s1b/s0;
+          U1+=x1[s]-m1;U2+=x2[s]-m2;
+          I11+=s2aa/s0-m1*m1;I12+=s2ab/s0-m1*m2;I22+=s2bb/s0-m2*m2;
+        }}
+      i=j;
+    }
+    const det=I11*I22-I12*I12; if(det<=1e-12)return null;
+    const d1=( I22*U1-I12*U2)/det, d2=(-I12*U1+I11*U2)/det;
+    b1+=d1;b2+=d2;
+    if(Math.abs(b1)>10)return null;
+    if(Math.abs(d1)+Math.abs(d2)<1e-8||it===19){
+      const det2=I11*I22-I12*I12; if(det2<=1e-12)return null;
+      return {z:b1/Math.sqrt(I22/det2)};
+    }
+  }
+  return null;
+}
+function kmRMST(time,status,n,tau){ // returns {mu,var} truncated at tau
+  const idx=Array.from({length:n},(_,i)=>i).sort((a,b)=>time[a]-time[b]);
+  let S=1,area=0,tPrev=0,atRisk=n,i=0;
+  const ev=[]; // {A? later, cumArea, nRisk,d}
+  while(i<n){
+    const t=time[idx[i]];let d=0,rem=0,j=i;
+    while(j<n&&time[idx[j]]===t){if(status[idx[j]])d++;rem++;j++;}
+    if(t>=tau){area+=S*(tau-tPrev);tPrev=tau;break;}
+    area+=S*(t-tPrev);tPrev=t;
+    if(d>0){ev.push({cumArea:area,nRisk:atRisk,d});S*=(1-d/atRisk);}
+    atRisk-=rem;i=j;
+  }
+  if(tPrev<tau)area+=S*(tau-tPrev);
+  let v=0;
+  for(const e of ev){const A=area-e.cumArea;
+    if(e.nRisk>e.d)v+=A*A*e.d/(e.nRisk*(e.nRisk-e.d));}
+  return {mu:area,va:v};
+}
+</script>
+<script>
+/* ================= per-replicate simulation engines ================= */
+function simContinuous(P,n1,n2,rng){
+  const n=n1+n2, cov=P.covOn, rho=cov?P.rho:0, s1r=Math.sqrt(1-rho*rho);
+  const y=new Float64Array(n),g=new Float64Array(n),x=cov?new Float64Array(n):null;
+  let m1=0,m2=0;
+  for(let i=0;i<n;i++){
+    const arm=i<n1?0:1, mu=arm?P.mu2:P.mu1;
+    let yi;
+    if(cov){const xi=rng.norm();x[i]=xi;yi=mu+P.sd*(rho*xi+s1r*rng.norm());}
+    else yi=mu+P.sd*rng.norm();
+    y[i]=yi;g[i]=arm;arm?m2+=yi:m1+=yi;
+  }
+  m1/=n1;m2/=n2;
+  let v1=0,v2=0;
+  for(let i=0;i<n1;i++)v1+=(y[i]-m1)**2;
+  for(let i=n1;i<n;i++)v2+=(y[i]-m2)**2;
+  v1/=(n1-1);v2/=(n2-1);
+  const se=Math.sqrt(v1/n1+v2/n2);
+  const dfW=(v1/n1+v2/n2)**2/((v1/n1)**2/(n1-1)+(v2/n2)**2/(n2-1));
+  let rejU;
+  if(P.design==="ni") rejU=((m2-m1+P.margin)/se>tinv(1-P.alpha,dfW))?1:0;
+  else rejU=(Math.abs(m2-m1)/se>tinv(1-P.alpha/2,dfW))?1:0;
+  let rejA=null;
+  if(cov){
+    const r=olsTest(y,g,x,n,P);
+    rejA=r?((Math.abs(r.b)/r.se>tinv(1-P.alpha/2,r.df))?1:0):0;
+  }
+  return {rejU,rejA};
+}
+function simBinaryLike(P,n1,n2,rng,useOR){
+  const n=n1+n2, cov=P.covOn, rho=cov?P.rho:0, s1r=Math.sqrt(1-rho*rho);
+  const zp1=qnorm(P.p1), zp2=qnorm(P.p2);
+  let a=0,c=0; // events in control (a) and treatment (c)
+  const y=cov?new Float64Array(n):null,g=cov?new Float64Array(n):null,x=cov?new Float64Array(n):null;
+  for(let i=0;i<n;i++){
+    const arm=i<n1?0:1, thr=arm?zp2:zp1;
+    let yi;
+    if(cov){const xi=rng.norm();x[i]=xi;yi=(rho*xi+s1r*rng.norm()<thr)?1:0;y[i]=yi;g[i]=arm;}
+    else yi=(rng.norm()<thr)?1:0;
+    if(yi){arm?c++:a++;}
+  }
+  const p1h=a/n1,p2h=c/n2;
+  let rejU=0;
+  if(useOR){
+    let A=a,B=n1-a,C=c,D=n2-c;
+    if(A===0||B===0||C===0||D===0){A+=.5;B+=.5;C+=.5;D+=.5;}
+    const lnor=Math.log((C*B)/(A*D)), seor=Math.sqrt(1/A+1/B+1/C+1/D);
+    rejU=(Math.abs(lnor/seor)>qnorm(1-P.alpha/2))?1:0;
+  }else if(P.design==="ni"){
+    const se=Math.sqrt(Math.max(p1h*(1-p1h),1e-9)/n1+Math.max(p2h*(1-p2h),1e-9)/n2);
+    rejU=(((p2h-p1h)+P.margin)/se>qnorm(1-P.alpha))?1:0;
+  }else{
+    const pb=(a+c)/n, se0=Math.sqrt(pb*(1-pb)*(1/n1+1/n2));
+    rejU=(se0>0&&Math.abs(p2h-p1h)/se0>qnorm(1-P.alpha/2))?1:0;
+  }
+  let rejA=null;
+  if(cov){
+    const r=logisticTest(y,g,x,n);
+    rejA=r?((Math.abs(r.z)>qnorm(1-P.alpha/2))?1:0):0;
+  }
+  return {rejU,rejA};
+}
+function simHR(P,n1,n2,rng){
+  const n=n1+n2, cov=P.covOn, rho=cov?P.rho:0;
+  const gamma=cov?rho*Math.sqrt((Math.PI*Math.PI/6)/(1-rho*rho)):0;
+  const l1=Math.LN2/P.med1,l2=l1*P.hr;
+  const time=new Float64Array(n),status=new Uint8Array(n),grp=new Uint8Array(n),xv=cov?new Float64Array(n):null;
+  for(let i=0;i<n;i++){
+    const arm=i<n1?0:1,l=arm?l2:l1;
+    const entry=rng.unif()*P.acc;
+    let lam=l;
+    if(cov){const xi=rng.norm();xv[i]=xi;lam=l*Math.exp(gamma*xi);}
+    const T=-Math.log(rng.unif())/lam, C=P.acc+P.fup-entry;
+    time[i]=Math.min(T,C);status[i]=T<=C?1:0;grp[i]=arm;
+  }
+  const z=logrank(time,status,grp,n);
+  const rejU=(Math.abs(z)>qnorm(1-P.alpha/2))?1:0;
+  let rejA=null;
+  if(cov){
+    const r=coxFit2(time,status,Array.from(grp),Array.from(xv),n);
+    rejA=r?((Math.abs(r.z)>qnorm(1-P.alpha/2))?1:0):0;
+  }
+  return {rejU,rejA};
+}
+function simRMST(P,n1,n2,rng){
+  const l1=Math.LN2/P.med1,l2=Math.LN2/P.med2;
+  const t1=new Float64Array(n1),s1=new Uint8Array(n1),t2=new Float64Array(n2),s2=new Uint8Array(n2);
+  for(let i=0;i<n1;i++){const entry=rng.unif()*P.acc,T=-Math.log(rng.unif())/l1,C=P.acc+P.fup-entry;
+    t1[i]=Math.min(T,C);s1[i]=T<=C?1:0;}
+  for(let i=0;i<n2;i++){const entry=rng.unif()*P.acc,T=-Math.log(rng.unif())/l2,C=P.acc+P.fup-entry;
+    t2[i]=Math.min(T,C);s2[i]=T<=C?1:0;}
+  const r1=kmRMST(t1,s1,n1,P.tau),r2=kmRMST(t2,s2,n2,P.tau);
+  const se=Math.sqrt(r1.va+r2.va);
+  const rejU=(se>0&&Math.abs(r2.mu-r1.mu)/se>qnorm(1-P.alpha/2))?1:0;
+  return {rejU,rejA:null};
+}
+function simCount(P,n1,n2,rng){
+  const l1=P.rate0,l2=P.rate0*P.rr,t=P.expo,k=P.disp;
+  let s1=0,ss1=0,s2=0,ss2=0;
+  for(let i=0;i<n1;i++){const fr=k>0?rng.gamma(1/k)*k:1;const y=rng.pois(l1*t*fr);s1+=y;ss1+=y*y;}
+  for(let i=0;i<n2;i++){const fr=k>0?rng.gamma(1/k)*k:1;const y=rng.pois(l2*t*fr);s2+=y;ss2+=y*y;}
+  const m1=s1/n1,m2=s2/n2;
+  if(m1<=0||m2<=0)return {rejU:0,rejA:null};
+  const v1=(ss1-n1*m1*m1)/(n1-1),v2=(ss2-n2*m2*m2)/(n2-1);
+  const se=Math.sqrt(v1/(n1*m1*m1)+v2/(n2*m2*m2));
+  const rejU=(se>0&&Math.abs(Math.log(m2/m1))/se>qnorm(1-P.alpha/2))?1:0;
+  return {rejU,rejA:null};
+}
+const SIMFN={cont:simContinuous,bin:(P,a,b,r)=>simBinaryLike(P,a,b,r,false),or:(P,a,b,r)=>simBinaryLike(P,a,b,r,true),hr:simHR,rmst:simRMST,count:simCount};
+const POWFN={cont:powContinuous,bin:powBinary,or:powOR,hr:powHR,rmst:powRMST,count:powCount};
+const SIMCHUNK={cont:200,bin:120,or:120,hr:40,rmst:60,count:150};
+
+const tick=()=>new Promise(r=>setTimeout(r,0));
+async function runSimBatch(P,n1,n2,nsim,seed,onProg){
+  const rng=makeRng(seed);let rU=0,rA=0,nA=0;
+  const ch=SIMCHUNK[P.outcome];
+  for(let i=0;i<nsim;i++){
+    const res=SIMFN[P.outcome](P,n1,n2,rng);
+    rU+=res.rejU;
+    if(res.rejA!==null){rA+=res.rejA;nA++;}
+    if((i+1)%ch===0){onProg((i+1)/nsim);await tick();}
+  }
+  onProg(1);
+  return {pU:rU/nsim,pA:nA?rA/nA:null,nsim};
+}
+async function simSolveN(P,onProg){
+  const za=zAlpha(P);
+  let n1f=solveNGeneric(P,POWFN[P.outcome]);
+  if(n1f===null)return null;
+  let n1=Math.max(4,Math.ceil(n1f));
+  const searchSim=Math.min(P.nsim,Math.max(400,Math.round(P.nsim/2)));
+  const trace=[];
+  for(let pass=0;pass<4;pass++){
+    const pr=ceilPair(n1,P.ratio);
+    const res=await runSimBatch(P,pr.n1,pr.n2,searchSim,P.seed+11*pass+1,
+      f=>onProg(f,`Search pass ${pass+1}`));
+    let p=P.covOn&&res.pA!==null?res.pA:res.pU;
+    trace.push({n1:pr.n1,p});
+    p=Math.min(0.995,Math.max(0.02,p));
+    const mce=1.96*Math.sqrt(p*(1-p)/searchSim);
+    if(Math.abs(p-P.targetPower)<=Math.max(0.015,mce*0.75))break;
+    const num=za+qnorm(P.targetPower),den=za+qnorm(p);
+    const ratio=den>0.05?(num/den)**2:4;
+    const next=Math.max(4,Math.ceil(n1*Math.min(6,Math.max(0.17,ratio))));
+    if(next===n1)break;
+    n1=next;
+  }
+  const pr=ceilPair(n1,P.ratio);
+  const fin=await runSimBatch(P,pr.n1,pr.n2,P.nsim,P.seed+97,f=>onProg(f,"Confirming"));
+  return {...pr,...fin,trace};
+}
+</script>
+<script>
+/* ================= outcome configuration ================= */
+const G={
+cont:'<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M1 17c4 0 5-13 9-13s5 13 9 13" stroke="#79C9EC" stroke-width="1.7" stroke-linecap="round"/></svg>',
+bin:'<svg width="20" height="20" viewBox="0 0 20 20"><circle cx="6" cy="10" r="4.4" fill="#79C9EC"/><circle cx="14.6" cy="10" r="4.4" fill="none" stroke="#EEBD6A" stroke-width="1.7"/></svg>',
+or:'<svg width="20" height="20" viewBox="0 0 20 20"><rect x="2" y="2" width="7" height="7" rx="1.5" fill="#79C9EC"/><rect x="11" y="2" width="7" height="7" rx="1.5" fill="none" stroke="#EEBD6A" stroke-width="1.6"/><rect x="2" y="11" width="7" height="7" rx="1.5" fill="none" stroke="#79C9EC" stroke-width="1.6"/><rect x="11" y="11" width="7" height="7" rx="1.5" fill="#EEBD6A"/></svg>',
+hr:'<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M2 3h5v4h4v5h4v5h3" stroke="#79C9EC" stroke-width="1.7"/><path d="M2 3h3v7h5v6h8" stroke="#EEBD6A" stroke-width="1.7" stroke-dasharray="3 2"/></svg>',
+rmst:'<svg width="20" height="20" viewBox="0 0 20 20"><path d="M2 4h5v4h4v5h4v4H2z" fill="#EEBD6A" opacity=".25"/><path d="M2 4h5v4h4v5h4v4" stroke="#D9A24E" stroke-width="1.7" fill="none"/></svg>',
+count:'<svg width="20" height="20" viewBox="0 0 20 20" fill="#79C9EC"><circle cx="4" cy="15" r="1.8"/><circle cx="9" cy="7" r="1.8"/><circle cx="12" cy="13" r="1.8" fill="#EEBD6A"/><circle cx="16" cy="5" r="1.8" fill="#EEBD6A"/><circle cx="6" cy="4" r="1.8"/><circle cx="16" cy="16" r="1.8" fill="#EEBD6A"/></svg>'
+};
+const OUT=[
+{id:'cont',name:'Continuous',sub:'Difference in means',glyph:G.cont,ni:true,cov:true,
+ fields:[
+  {id:'mu1',lab:'Control mean',hint:'μ₁',v:0,step:0.1},
+  {id:'mu2',lab:'Treatment mean',hint:'μ₂',v:0.5,step:0.1},
+  {id:'sd',lab:'Common SD',hint:'σ',v:1,step:0.1,min:1e-9},
+  {id:'margin',lab:'Non-inferiority margin',hint:'m > 0, higher = better',v:0.3,step:0.05,min:1e-9,ni:true}]},
+{id:'bin',name:'Binary',sub:'Two proportions (risk diff.)',glyph:G.bin,ni:true,cov:true,
+ fields:[
+  {id:'p1',lab:'Control proportion',hint:'p₁ (success)',v:0.30,step:0.01,min:0.001,max:0.999},
+  {id:'p2',lab:'Treatment proportion',hint:'p₂',v:0.45,step:0.01,min:0.001,max:0.999},
+  {id:'margin',lab:'Non-inferiority margin',hint:'m > 0, on risk scale',v:0.10,step:0.01,min:1e-9,ni:true}]},
+{id:'or',name:'Odds ratio',sub:'Logistic / case–control style',glyph:G.or,ni:false,cov:true,
+ fields:[
+  {id:'p1',lab:'Control proportion',hint:'p₁',v:0.30,step:0.01,min:0.001,max:0.999},
+  {id:'or',lab:'Odds ratio',hint:'treatment vs control',v:2.0,step:0.1,min:1e-6}]},
+{id:'hr',name:'Hazard ratio',sub:'Log-rank / Cox (Schoenfeld)',glyph:G.hr,ni:false,cov:true,
+ fields:[
+  {id:'hr',lab:'Hazard ratio',hint:'treatment vs control',v:0.70,step:0.05,min:1e-6},
+  {id:'med1',lab:'Control median survival',hint:'time units, exponential',v:12,step:1,min:1e-9},
+  {id:'acc',lab:'Accrual period',hint:'uniform entry',v:24,step:1,min:1e-9},
+  {id:'fup',lab:'Minimum follow-up',hint:'after accrual ends',v:12,step:1,min:0}]},
+{id:'rmst',name:'RMST',sub:'Restricted mean survival',glyph:G.rmst,ni:false,cov:false,
+ fields:[
+  {id:'med1',lab:'Control median survival',hint:'exponential',v:12,step:1,min:1e-9},
+  {id:'med2',lab:'Treatment median survival',hint:'exponential',v:18,step:1,min:1e-9},
+  {id:'tau',lab:'Truncation time τ',hint:'must be ≤ accrual + follow-up',v:24,step:1,min:1e-9},
+  {id:'acc',lab:'Accrual period',hint:'uniform entry',v:24,step:1,min:1e-9},
+  {id:'fup',lab:'Minimum follow-up',hint:'after accrual ends',v:12,step:1,min:0}]},
+{id:'count',name:'Count / rate',sub:'Poisson or negative binomial',glyph:G.count,ni:false,cov:false,
+ fields:[
+  {id:'rate0',lab:'Control event rate',hint:'events per time unit',v:1.2,step:0.1,min:1e-9},
+  {id:'rr',lab:'Rate ratio',hint:'treatment vs control',v:0.70,step:0.05,min:1e-6},
+  {id:'expo',lab:'Follow-up per patient',hint:'time units',v:1,step:0.5,min:1e-9},
+  {id:'disp',lab:'Dispersion k',hint:'0 = Poisson; NB variance μ+kμ²',v:0.5,step:0.1,min:0}]}
+];
+
+/* persistent state */
+const S={outcome:'cont',method:'formula',solve:'n',design:'sup',
+ alpha:0.05,targetPower:0.80,Ntotal:120,ratio:1,dropout:10,nsim:1000,seed:'',
+ covOn:false,rho:0.5,vals:{}};
+OUT.forEach(o=>{S.vals[o.id]={};o.fields.forEach(f=>S.vals[o.id][f.id]=f.v);});
+
+/* ================= form rendering ================= */
+const $=id=>document.getElementById(id);
+function segHTML(id,opts,cur,cls=''){
+  return `<div class="seg ${cls}" role="group" id="${id}">`+opts.map(o=>
+   `<button type="button" data-v="${o.v}" class="${o.v===cur?'on':''}" ${o.title?`title="${o.title}"`:''}>${o.t}</button>`).join('')+`</div>`;
+}
+function fieldHTML(f,val){
+  return `<div class="field"><label for="f_${f.id}">${f.lab}${f.hint?`<span class="hint">${f.hint}</span>`:''}</label>
+  <input type="number" id="f_${f.id}" value="${val}" step="${f.step||'any'}" ${f.min!==undefined?`min="${f.min}"`:''} ${f.max!==undefined?`max="${f.max}"`:''}></div>`;
+}
+function renderForm(){
+  const o=OUT.find(x=>x.id===S.outcome);
+  $('panelTitle').textContent=o.name+' outcome';
+  const V=S.vals[o.id];
+  let h='';
+  if(o.ni)h+=`<div class="field"><label>Hypothesis</label>${segHTML('segDesign',[{v:'sup',t:'Superiority'},{v:'ni',t:'Non-inferiority'}],S.design)}</div>`;
+  h+=o.fields.filter(f=>!f.ni||S.design==='ni').map(f=>fieldHTML(f,V[f.id])).join('');
+  h+=`<fieldset class="grp"><legend>Error &amp; allocation</legend>
+   <div class="row2">
+    <div class="field"><label for="f_alpha">α ${S.design==='ni'&&o.ni?'<span class="hint">one-sided</span>':'<span class="hint">two-sided</span>'}</label>
+      <input type="number" id="f_alpha" value="${S.alpha}" step="0.01" min="0.0001" max="0.3"></div>
+    ${S.solve==='n'
+      ?`<div class="field"><label for="f_pow">Target power</label><input type="number" id="f_pow" value="${S.targetPower}" step="0.05" min="0.1" max="0.999"></div>`
+      :`<div class="field"><label for="f_N">Total N</label><input type="number" id="f_N" value="${S.Ntotal}" step="2" min="4"></div>`}
+   </div>
+   <div class="row2">
+    <div class="field"><label for="f_ratio">Allocation T : C</label><input type="number" id="f_ratio" value="${S.ratio}" step="0.25" min="0.2" max="5"></div>
+    ${S.solve==='n'?`<div class="field"><label for="f_drop">Dropout %<span class="hint">inflates N</span></label><input type="number" id="f_drop" value="${S.dropout}" step="5" min="0" max="60"></div>`:'<div></div>'}
+   </div>
+   <div class="field"><label>Solve for</label>${segHTML('segSolve',[{v:'n',t:'Sample size'},{v:'power',t:'Power at given N'}],S.solve)}</div>
+  </fieldset>`;
+  h+=`<div class="field"><label>Calculation method</label>${segHTML('segMethod',[{v:'formula',t:'Formula'},{v:'sim',t:'Simulation'}],S.method,'method')}</div>`;
+  if(S.method==='sim'){
+    h+=`<fieldset class="grp"><legend>Monte-Carlo</legend>
+     <div class="row2">
+      <div class="field"><label for="f_nsim">Replicates</label><select id="f_nsim">${[500,1000,2000,5000].map(k=>`<option ${k===S.nsim?'selected':''}>${k}</option>`).join('')}</select></div>
+      <div class="field"><label for="f_seed">Seed<span class="hint">blank = random</span></label><input type="number" id="f_seed" value="${S.seed}" step="1"></div>
+     </div></fieldset>`;
+    if(o.cov&&S.design==='sup'){
+      h+=`<fieldset class="grp cov"><legend>Baseline covariate</legend>
+       <div class="switch-row"><span class="lab">Adjust analysis for a baseline covariate</span>
+        <label class="switch"><input type="checkbox" id="f_cov" ${S.covOn?'checked':''}><span class="trk"></span></label></div>
+       <div class="field" id="rhoField" style="display:${S.covOn?'flex':'none'}">
+        <label for="f_rho">Correlation ρ with outcome</label>
+        <div class="rho-wrap"><input type="range" id="f_rho" min="0" max="0.9" step="0.05" value="${S.rho}"><span class="rho-val" id="rhoVal">${S.rho.toFixed(2)}</span></div>
+       </div></fieldset>`;
+    } else if(o.cov&&S.design==='ni'){
+      h+=`<div class="field"><span class="hint">Covariate adjustment is available for superiority designs only.</span></div>`;
+    }
+  }
+  h+=`<button class="run" id="btnRun" type="button">${S.solve==='n'?'Calculate sample size':'Calculate power'}</button>
+      <div class="progress" id="prog"><i id="progBar"></i></div>
+      <div class="err" id="errBox"></div>`;
+  $('form').innerHTML=h;
+  wireForm(o);
+}
+function wireForm(o){
+  const bindSeg=(id,cb)=>{const el=$(id);if(!el)return;
+    el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>cb(b.dataset.v)));};
+  bindSeg('segDesign',v=>{S.design=v;if(v==='ni')S.covOn=false;saveInputs(o);renderForm();});
+  bindSeg('segSolve',v=>{S.solve=v;saveInputs(o);renderForm();});
+  bindSeg('segMethod',v=>{S.method=v;saveInputs(o);renderForm();});
+  const cov=$('f_cov');
+  if(cov)cov.addEventListener('change',()=>{S.covOn=cov.checked;$('rhoField').style.display=cov.checked?'flex':'none';});
+  const rho=$('f_rho');
+  if(rho)rho.addEventListener('input',()=>{S.rho=parseFloat(rho.value);$('rhoVal').textContent=S.rho.toFixed(2);});
+  $('btnRun').addEventListener('click',calculate);
+}
+function saveInputs(o){
+  o.fields.forEach(f=>{const el=$('f_'+f.id);if(el)S.vals[o.id][f.id]=parseFloat(el.value);});
+  const g=(id,cur)=>{const el=$(id);return el?parseFloat(el.value):cur;};
+  S.alpha=g('f_alpha',S.alpha);S.targetPower=g('f_pow',S.targetPower);
+  S.Ntotal=g('f_N',S.Ntotal);S.ratio=g('f_ratio',S.ratio);S.dropout=g('f_drop',S.dropout);
+  const ns=$('f_nsim');if(ns)S.nsim=parseInt(ns.value);
+  const sd=$('f_seed');if(sd)S.seed=sd.value;
+}
+function renderNav(){
+  $('nav').innerHTML=OUT.map(o=>`<button class="tab ${o.id===S.outcome?'active':''}" data-o="${o.id}" type="button">
+    <span class="glyph">${o.glyph}</span><span><span class="t-name">${o.name}</span><br><span class="t-sub">${o.sub}</span></span></button>`).join('');
+  $('nav').querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+    saveInputs(OUT.find(x=>x.id===S.outcome));
+    S.outcome=t.dataset.o;
+    const o=OUT.find(x=>x.id===S.outcome);
+    if(!o.ni)S.design='sup';
+    if(!o.cov)S.covOn=false;
+    renderNav();renderForm();
+  }));
+}
+</script>
+<script>
+/* ================= validation & parameter assembly ================= */
+function buildParams(){
+  const o=OUT.find(x=>x.id===S.outcome);
+  saveInputs(o);
+  const V=S.vals[o.id],P={outcome:o.id,design:o.ni?S.design:'sup',method:S.method,solve:S.solve,
+    alpha:S.alpha,targetPower:S.targetPower,Ntotal:Math.round(S.Ntotal),ratio:S.ratio,
+    dropout:S.solve==='n'?(S.dropout||0):0,nsim:S.nsim,
+    seed:S.seed===''||isNaN(parseInt(S.seed))?(Date.now()%2**31):parseInt(S.seed),
+    covOn:S.method==='sim'&&o.cov&&S.design==='sup'&&S.covOn,rho:S.rho,covAnalytic:false,...V};
+  const errs=[],warns=[];
+  const bad=(c,m)=>{if(c)errs.push(m);};
+  bad(!(P.alpha>0&&P.alpha<0.3),'α must be in (0, 0.3).');
+  bad(S.solve==='n'&&!(P.targetPower>P.alpha&&P.targetPower<1),'Target power must be between α and 1.');
+  bad(S.solve==='power'&&!(P.Ntotal>=4),'Total N must be at least 4.');
+  bad(!(P.ratio>=0.2&&P.ratio<=5),'Allocation ratio must be between 0.2 and 5.');
+  if(o.id==='cont'){
+    bad(!(P.sd>0),'SD must be positive.');
+    if(P.design==='sup')bad(P.mu1===P.mu2,'Means are equal — no effect to detect.');
+    else{bad(!(P.margin>0),'NI margin must be positive.');
+         bad((P.mu2-P.mu1)+P.margin<=0,'Expected difference + margin must be positive (higher assumed better).');}
+  }
+  if(o.id==='bin'){
+    bad(!(P.p1>0&&P.p1<1&&P.p2>0&&P.p2<1),'Proportions must be strictly between 0 and 1.');
+    if(P.design==='sup')bad(P.p1===P.p2,'Proportions are equal — no effect to detect.');
+    else{bad(!(P.margin>0),'NI margin must be positive.');
+         bad((P.p2-P.p1)+P.margin<=0,'Expected difference + margin must be positive.');}
+  }
+  if(o.id==='or'){
+    bad(!(P.p1>0&&P.p1<1),'Control proportion must be in (0,1).');
+    bad(!(P.or>0)||P.or===1,'OR must be positive and ≠ 1.');
+    if(P.or>0)P.p2=P.or*P.p1/(1-P.p1+P.or*P.p1);
+  }
+  if(o.id==='hr'){
+    bad(!(P.hr>0)||P.hr===1,'HR must be positive and ≠ 1.');
+    bad(!(P.med1>0&&P.acc>0&&P.fup>=0),'Median and study periods must be positive.');
+  }
+  if(o.id==='rmst'){
+    bad(!(P.med1>0&&P.med2>0&&P.tau>0&&P.acc>0&&P.fup>=0),'Medians, τ and study periods must be positive.');
+    bad(P.med1===P.med2,'Medians are equal — no RMST difference under the exponential model.');
+    bad(P.tau>P.acc+P.fup+1e-9,'τ cannot exceed accrual + follow-up: no patient can be observed to τ.');
+  }
+  if(o.id==='count'){
+    bad(!(P.rate0>0&&P.expo>0),'Rate and follow-up must be positive.');
+    bad(!(P.rr>0)||P.rr===1,'Rate ratio must be positive and ≠ 1.');
+    bad(P.disp<0,'Dispersion cannot be negative.');
+  }
+  return {P,o,errs,warns};
+}
+function postWarnings(P,o,n1,n2,warns){
+  if(o.id==='bin'||o.id==='or'){
+    const m=Math.min(n1*P.p1,n1*(1-P.p1),n2*P.p2,n2*(1-P.p2));
+    if(m<5)warns.push('Expected cell count below 5 — normal-approximation results are unreliable here; prefer simulation (exact behaviour of the test is captured empirically).');
+  }
+  if(o.id==='count'&&P.rate0*P.expo<0.2)warns.push('Very low expected counts per patient — the log-rate normal approximation is rough; trust the simulation over the formula.');
+  if((o.id==='hr'||o.id==='rmst')&&P.fup===0)warns.push('Zero minimum follow-up: patients accrued late contribute almost no information.');
+  if(o.id==='rmst'&&Math.abs(P.tau-(P.acc+P.fup))<1e-9)warns.push('τ equals maximal follow-up — the KM tail at τ is estimated from very few patients; simulation results may be unstable.');
+}
+
+/* ================= formula strips (with substituted values) ================= */
+function formulaStrip(P,o,R){
+  const za=zAlpha(P).toFixed(3),zb=qnorm(P.targetPower).toFixed(3);
+  const zaSym=P.design==='ni'?'z₁₋α':'z₁₋α/₂';
+  switch(o.id){
+    case 'cont':{const eff=P.design==='ni'?`(Δ+m) = ${fmt((P.mu2-P.mu1)+P.margin)}`:`Δ = ${fmt(Math.abs(P.mu2-P.mu1))}`;
+      return `n₁ = (1 + 1/r)·σ²·(${zaSym} + z₁₋β)² / Δ²  with  σ = ${fmt(P.sd)},  ${eff},  r = ${P.ratio},  ${zaSym} = ${za},  z₁₋β = ${zb}  →  <b>n₁ = ${R.n1}</b>`;}
+    case 'bin':return P.design==='ni'
+      ?`n₁ = (${zaSym}+z₁₋β)²·[p₁q₁ + p₂q₂/r] / (Δ+m)²  with  Δ+m = ${fmt((P.p2-P.p1)+P.margin)}  →  <b>n₁ = ${R.n1}</b>`
+      :`n₁ = [ ${zaSym}√((1+1/r)·p̄q̄) + z₁₋β√(p₁q₁+p₂q₂/r) ]² / (p₁−p₂)²  with  p̄ = ${fmt((P.p1+P.ratio*P.p2)/(1+P.ratio))}  →  <b>n₁ = ${R.n1}</b>`;
+    case 'or':return `n₁ = (${zaSym}+z₁₋β)²·[1/(p₁q₁) + 1/(r·p₂q₂)] / ln²(OR)  with  p₂ = ${fmt(P.p2)} (from OR·odds₁),  ln OR = ${fmt(Math.log(P.or))}  →  <b>n₁ = ${R.n1}</b>`;
+    case 'hr':{const l1=Math.LN2/P.med1;
+      return `Schoenfeld:  D = (${zaSym}+z₁₋β)² / (π₁π₂·ln²HR) = <b>${Math.ceil(R.D)}</b> events;   N = D / (π₁P₁+π₂P₂)  with  P₁ = ${fmt(hrEventProb(l1,P.acc,P.fup))},  P₂ = ${fmt(hrEventProb(l1*P.hr,P.acc,P.fup))}`;}
+    case 'rmst':return `n₁ = (${zaSym}+z₁₋β)²·(v₁ + v₂/r) / Δμ²  with  Δμ(τ=${P.tau}) = ${fmt(R.effRMST)},  v = ∫₀^τ m(t)²·λ dt / (S·G)  (exponential model, uniform accrual)`;
+    case 'count':return `n₁ = (${zaSym}+z₁₋β)²·[(1/(λ₁t)+k) + (1/(λ₂t)+k)/r] / ln²(RR)  with  λ₁t = ${fmt(P.rate0*P.expo)},  k = ${P.disp}  →  <b>n₁ = ${R.n1}</b>`;
+  }
+}
+/* ================= methods notes ================= */
+const METHODS={
+cont:`<p><strong>Formula.</strong> Two-sample normal approximation for a difference in means with unequal allocation; superiority uses two-sided α, non-inferiority tests H₀: μ<sub>T</sub>−μ<sub>C</sub> ≤ −m at one-sided α (higher assumed better).</p>
+<p><strong>Simulation.</strong> Normal outcomes analysed by Welch's t-test. With a baseline covariate on, (X, Y) are bivariate normal with correlation ρ and the adjusted analysis is ANCOVA (Y ~ arm + X). The residual SD shrinks by √(1−ρ²), which is exactly the closed-form gain — the dashed analytic ANCOVA curve is overlaid so you can see the simulation agree with it.</p>`,
+bin:`<p><strong>Formula.</strong> Two-proportion z-test with the pooled-variance null (superiority) or unpooled Wald with a shifted null (non-inferiority, risk-difference scale, higher p = better).</p>
+<p><strong>Simulation.</strong> Outcomes are generated from a latent-probit model: Y = 1 if ρX + √(1−ρ²)Z falls below Φ⁻¹(p<sub>arm</sub>), so ρ is the latent-scale (biserial) correlation between covariate and outcome — the observable point-biserial correlation is smaller. Adjusted analysis is logistic regression (Wald test on the arm coefficient). Note the gain from adjustment is smaller than for continuous outcomes and works through non-collapsibility: adjustment moves the OR away from 1 rather than shrinking the SE.</p>`,
+or:`<p><strong>Formula.</strong> Wald test on log OR; p₂ is derived from the control proportion and the OR. Sample size uses Var(ln OR) ≈ 1/(n₁p₁q₁) + 1/(n₂p₂q₂).</p>
+<p><strong>Simulation.</strong> Same latent-probit generation as the binary outcome; unadjusted analysis is the 2×2 Wald log-OR (with a 0.5 continuity correction if a cell is empty), adjusted analysis is logistic regression. The conditional (adjusted) OR is larger in magnitude than the marginal OR — non-collapsibility — so power can change even though the covariate is balanced by randomisation.</p>`,
+hr:`<p><strong>Formula.</strong> Schoenfeld's events formula D = (z<sub>1−α/2</sub>+z<sub>1−β</sub>)²/(π₁π₂ ln²HR), converted to N via event probabilities under exponential survival, uniform accrual over the accrual period, and administrative censoring at accrual + follow-up.</p>
+<p><strong>Simulation.</strong> Exponential event times with staggered entry; unadjusted analysis is the log-rank test, adjusted analysis a two-covariate Cox model (Breslow ties, Newton–Raphson). The covariate acts multiplicatively on the hazard with coefficient calibrated so that corr(X, log T) = ρ; the entered HR is the covariate-conditional HR, so the unadjusted (marginal) HR is attenuated toward 1 — this is why the adjusted Cox analysis can be visibly more powerful.</p>`,
+rmst:`<p><strong>Formula.</strong> Difference in restricted mean survival time to τ under exponential survival. The asymptotic variance of the KM-based RMST, ∫₀^τ [∫<sub>t</sub>^τ S]² dΛ/(S·G), is integrated numerically with G(t) the censoring survival implied by uniform accrual plus administrative censoring.</p>
+<p><strong>Simulation.</strong> Kaplan–Meier RMST in each arm with the standard (Greenwood-type) variance and a z-test on the difference — i.e. the unadjusted analysis of Royston–Parmar / Uno and colleagues. Covariate adjustment (e.g. via pseudo-observations) is not implemented for RMST.</p>`,
+count:`<p><strong>Formula.</strong> Wald test on the log rate ratio with Var(ln λ̂) ≈ (1/(λt)+k)/n per arm, where k is the negative-binomial dispersion (k = 0 gives Poisson).</p>
+<p><strong>Simulation.</strong> Counts are Poisson–gamma (NB) draws; the test is a robust delta-method z on the log ratio of mean counts using empirical variances, so it stays honest under overdispersion.</p>`};
+const MC_NOTE=`<p><strong>Monte-Carlo error.</strong> Simulated power is reported with a 95% binomial interval; with 1,000 replicates the half-width near 80% power is about ±2.5 percentage points. Fix the seed to make runs reproducible.</p>`;
+</script>
+<script>
+/* ================= calculation orchestration ================= */
+let charts={};
+function setProgress(frac,label){
+  const p=$('prog'),b=$('progBar');
+  p.classList.add('on');b.style.width=(100*frac).toFixed(1)+'%';
+  if(label)b.title=label;
+}
+function clearProgress(){$('prog').classList.remove('on');$('progBar').style.width='0%';}
+function splitN(N,r){const n1=Math.max(2,Math.round(N/(1+r)));return {n1,n2:Math.max(2,N-n1)};}
+
+async function calculate(){
+  const {P,o,errs,warns}=buildParams();
+  const eb=$('errBox');
+  if(errs.length){eb.innerHTML=errs.join('<br>');eb.classList.add('on');return;}
+  eb.classList.remove('on');
+  const btn=$('btnRun');btn.disabled=true;
+  try{
+    const R={P,o,warns};
+    if(P.solve==='n'){
+      if(P.method==='formula'){
+        const n1s=solveNGeneric(P,POWFN[o.id]);
+        if(n1s===null)throw new Error('No feasible sample size below 4 million per arm — effect too small.');
+        Object.assign(R,ceilPair(n1s,P.ratio));
+        R.powerAnalytic=POWFN[o.id](R.n1,{...P,ratio:R.n2/R.n1});
+      }else{
+        const sr=await simSolveN(P,setProgress);
+        if(!sr)throw new Error('No feasible sample size below 4 million per arm — effect too small.');
+        Object.assign(R,sr);
+        R.powerAnalytic=POWFN[o.id](R.n1,{...P,ratio:R.n2/R.n1});
+      }
+      R.Nrand=P.dropout>0?Math.ceil((R.n1+R.n2)/(1-P.dropout/100)):R.N;
+    }else{
+      const sp=splitN(P.Ntotal,P.ratio);
+      Object.assign(R,sp,{N:sp.n1+sp.n2});
+      const Peff={...P,ratio:sp.n2/sp.n1};
+      R.powerAnalytic=POWFN[o.id](sp.n1,Peff);
+      if(P.method==='sim'){
+        const res=await runSimBatch(Peff,sp.n1,sp.n2,P.nsim,P.seed,f=>setProgress(f,'Simulating'));
+        Object.assign(R,res);
+      }
+    }
+    if(o.id==='hr'){
+      const l1=Math.LN2/P.med1;
+      R.D=R.n1*hrEventProb(l1,P.acc,P.fup)+R.n2*hrEventProb(l1*P.hr,P.acc,P.fup);
+    }
+    if(o.id==='rmst'){
+      const l1=Math.LN2/P.med1,l2=Math.LN2/P.med2;
+      R.effRMST=rmstMu(l2,P.tau)-rmstMu(l1,P.tau);
+      R.D=R.n1*hrEventProb(l1,P.acc,P.fup)+R.n2*hrEventProb(l2,P.acc,P.fup);
+    }
+    postWarnings(P,o,R.n1,R.n2,warns);
+    renderResults(R);
+  }catch(e){eb.textContent=e.message;eb.classList.add('on');}
+  finally{btn.disabled=false;clearProgress();}
+}
+
+/* ================= results rendering ================= */
+function ciTxt(p,n){const h=1.96*Math.sqrt(p*(1-p)/n);return `${pct(p)} <small>± ${(100*h).toFixed(1)} pp</small>`;}
+function effectSummary(P,o){
+  switch(o.id){
+    case 'cont':return {lab:'Standardised effect',val:fmt(Math.abs(P.mu2-P.mu1)/P.sd,2)+'<small> δ</small>'};
+    case 'bin':return {lab:'Risk difference',val:fmt(P.p2-P.p1,3)};
+    case 'or':return {lab:'p₂ implied by OR',val:fmt(P.p2,3)};
+    case 'hr':return {lab:'Hazard ratio',val:fmt(P.hr,2)};
+    case 'rmst':return {lab:'ΔRMST at τ',val:''};
+    case 'count':return {lab:'Rate ratio',val:fmt(P.rr,2)};
+  }
+}
+function renderResults(R){
+  const {P,o}=R,isSim=P.method==='sim';
+  let stats='';
+  stats+=`<div class="stat"><div class="lab">Control arm</div><div class="val ctrl">${R.n1}</div></div>`;
+  stats+=`<div class="stat"><div class="lab">Treatment arm</div><div class="val trt">${R.n2}</div></div>`;
+  stats+=`<div class="stat"><div class="lab">Formula power</div><div class="val">${pct(R.powerAnalytic)}</div></div>`;
+  if(isSim&&R.pU!==undefined)
+    stats+=`<div class="stat"><div class="lab">Simulated power${P.covOn?' (unadj.)':''}</div><div class="val">${ciTxt(R.pU,R.nsim)}</div></div>`;
+  if(isSim&&P.covOn&&R.pA!==null&&R.pA!==undefined)
+    stats+=`<div class="stat"><div class="lab">Simulated, adjusted</div><div class="val trt">${ciTxt(R.pA,R.nsim)}</div></div>`;
+  if(R.D!==undefined)
+    stats+=`<div class="stat"><div class="lab">Expected events</div><div class="val">${Math.round(R.D)}</div></div>`;
+  const es=effectSummary(P,o);
+  if(o.id==='rmst')es.val=fmt(R.effRMST,2)+'<small> t-units</small>';
+  stats+=`<div class="stat"><div class="lab">${es.lab}</div><div class="val">${es.val}</div></div>`;
+
+  let head;
+  if(P.solve==='n'){
+    head=`<div class="n-block"><div class="lab">Total sample size</div>
+      <div class="N"><span class="nsym">N =</span>${R.N}</div>
+      <div class="after">${P.dropout>0?`randomise <strong>${R.Nrand}</strong> to allow for ${P.dropout}% dropout`:'no dropout inflation applied'}</div></div>`;
+  }else{
+    const shown=isSim?(P.covOn&&R.pA!=null?R.pA:R.pU):R.powerAnalytic;
+    head=`<div class="n-block"><div class="lab">${isSim?'Simulated power':'Power'} at N = ${R.N}</div>
+      <div class="N">${pct(shown)}</div>
+      <div class="after">${P.design==='ni'?'one-sided':'two-sided'} α = ${P.alpha}${isSim?` · ${R.nsim} replicates`:''}</div></div>`;
+  }
+  const warnsHtml=R.warns.length?`<div class="warn-note on">${R.warns.join('<br>')}</div>`:'';
+  let covCard='';
+  if(isSim&&P.covOn&&R.pA!=null){
+    const za=zAlpha(P);
+    const zU=za+qnorm(Math.min(.995,Math.max(.02,R.pU))),zA2=za+qnorm(Math.min(.995,Math.max(.02,R.pA)));
+    const saving=zA2>0&&zU>0&&R.pA>R.pU?1-(zU/zA2)**2:null;
+    covCard=`<section class="card cov-card"><h2><span class="k">Covariate</span>Effect of adjusting for the baseline covariate (ρ = ${P.rho.toFixed(2)})</h2>
+      <div class="cov-body">
+        <div class="cov-read">
+          <div class="delta">${R.pA>=R.pU?'+':'−'}${(100*Math.abs(R.pA-R.pU)).toFixed(1)} pp</div>
+          <div>power from adjustment at this N.</div>
+          ${saving!==null&&saving>0.005?`<div style="margin-top:8px">Roughly the same power with <strong>~${(100*saving).toFixed(0)}% fewer patients</strong> (normal-approximation equivalence).</div>`:''}
+          ${(o.id==='or'||o.id==='hr')?'<div style="margin-top:8px;font-size:12px;color:var(--muted)">For OR/HR the adjusted estimand is conditional, not marginal — gains come partly from de-attenuation, not variance reduction.</div>':''}
+        </div>
+        <div class="cov-chart-box"><canvas id="covChart" aria-label="Adjusted versus unadjusted power"></canvas></div>
+      </div></section>`;
+  }
+  $('results').innerHTML=`
+   <section class="card">
+     <div class="headline">${head}<div class="stat-grid">${stats}</div></div>
+     ${warnsHtml}
+     <div class="formula-strip">${formulaStrip(P,o,R)}</div>
+   </section>
+   <section class="card chart-card">
+     <h2><span class="k">Figure</span>Power against total sample size</h2>
+     <div class="chart-box"><canvas id="powerChart"></canvas></div>
+     <div class="chart-note">Curve: closed-form approximation. Points: this run${isSim?' (Monte-Carlo, vertical bars = 95% binomial CI)':''}.</div>
+   </section>
+   ${covCard}
+   <section class="card"><details class="methods" open><summary>Methods &amp; assumptions</summary>
+     <div class="m-body">${METHODS[o.id]}${isSim?MC_NOTE:''}</div></details></section>`;
+  drawPowerChart(R);
+  if(isSim&&P.covOn&&R.pA!=null)drawCovChart(R);
+}
+
+/* ================= charts ================= */
+const chartFont={family:"'Iowan Old Style','Palatino Linotype',Georgia,serif",size:12};
+if(typeof Chart!=='undefined'){Chart.defaults.color='#B9C2D4';Chart.defaults.borderColor='rgba(230,235,245,.08)';}
+function destroyChart(k){if(charts[k]){charts[k].destroy();delete charts[k];}}
+function drawPowerChart(R){
+  destroyChart('power');
+  const {P,o}=R,r=R.n2/R.n1;
+  const Nstar=R.N,lo=Math.max(6,Math.round(Nstar*0.3)),hi=Math.round(Nstar*2.1);
+  const pts=[],ptsAdj=[];
+  for(let i=0;i<=40;i++){
+    const N=lo+(hi-lo)*i/40,n1=N/(1+r);
+    pts.push({x:Math.round(N),y:100*POWFN[o.id](n1,{...P,ratio:r,covAnalytic:false})});
+    if(P.covOn&&o.id==='cont')ptsAdj.push({x:Math.round(N),y:100*POWFN[o.id](n1,{...P,ratio:r,covAnalytic:true})});
+  }
+  const ds=[{type:'line',label:'Formula (unadjusted)',data:pts,borderColor:'#E6EBF5',borderWidth:2,pointRadius:0,tension:.25}];
+  if(ptsAdj.length)ds.push({type:'line',label:'Formula, ANCOVA (1−ρ²)',data:ptsAdj,borderColor:'#EEBD6A',borderDash:[6,4],borderWidth:2,pointRadius:0,tension:.25});
+  if(P.solve==='n')ds.push({type:'line',label:'Target power',data:[{x:lo,y:100*P.targetPower},{x:hi,y:100*P.targetPower}],borderColor:'#77839C',borderDash:[3,4],borderWidth:1.4,pointRadius:0});
+  if(P.method==='sim'&&R.pU!==undefined){
+    ds.push({type:'scatter',label:'Simulated (unadjusted)',data:[{x:R.N,y:100*R.pU}],backgroundColor:'#79C9EC',pointRadius:6,pointHoverRadius:7,pointStyle:'rectRot'});
+    if(P.covOn&&R.pA!=null)ds.push({type:'scatter',label:'Simulated (adjusted)',data:[{x:R.N,y:100*R.pA}],backgroundColor:'#EEBD6A',pointRadius:6,pointHoverRadius:7,pointStyle:'circle'});
+  }else{
+    ds.push({type:'scatter',label:'This design',data:[{x:R.N,y:100*R.powerAnalytic}],backgroundColor:'#F2C14E',borderColor:'#E6EBF5',borderWidth:1.2,pointRadius:6,pointStyle:'circle'});
+  }
+  const ciBars=(P.method==='sim'&&R.pU!==undefined)?[
+    {p:R.pU,color:'#79C9EC'},...(P.covOn&&R.pA!=null?[{p:R.pA,color:'#EEBD6A'}]:[])]:[];
+  charts.power=new Chart($('powerChart'),{
+    data:{datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:350},
+      scales:{
+        x:{type:'linear',title:{display:true,text:'Total N randomised (analysed)',font:chartFont},grid:{color:'rgba(230,235,245,.08)'},ticks:{font:chartFont}},
+        y:{min:0,max:100,title:{display:true,text:'Power (%)',font:chartFont},grid:{color:'rgba(230,235,245,.08)'},ticks:{font:chartFont,callback:v=>v+'%'}}},
+      plugins:{legend:{labels:{font:{...chartFont,size:11.5},boxWidth:18,usePointStyle:false}},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y.toFixed(1)}% at N = ${c.parsed.x}`}}}},
+    plugins:[{id:'ciBars',afterDatasetsDraw(ch){
+      if(!ciBars.length)return;
+      const {ctx}=ch,xs=ch.scales.x,ys=ch.scales.y;
+      ciBars.forEach(b=>{
+        const h=1.96*Math.sqrt(b.p*(1-b.p)/R.nsim);
+        const x=xs.getPixelForValue(R.N);
+        ctx.save();ctx.strokeStyle=b.color;ctx.lineWidth=2;
+        ctx.beginPath();
+        ctx.moveTo(x,ys.getPixelForValue(100*Math.min(1,b.p+h)));
+        ctx.lineTo(x,ys.getPixelForValue(100*Math.max(0,b.p-h)));
+        ctx.stroke();ctx.restore();});
+    }}]});
+}
+function drawCovChart(R){
+  destroyChart('cov');
+  charts.cov=new Chart($('covChart'),{
+    type:'bar',
+    data:{labels:['Unadjusted','Adjusted for X'],
+      datasets:[{data:[100*R.pU,100*R.pA],backgroundColor:['#79C9EC','#EEBD6A'],borderRadius:8,maxBarThickness:64}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:{duration:350},
+      scales:{y:{min:0,max:100,ticks:{font:chartFont,callback:v=>v+'%'},grid:{color:'rgba(230,235,245,.08)'}},
+              x:{ticks:{font:chartFont},grid:{display:false}}},
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:c=>{const p=c.parsed.y/100,h=196*Math.sqrt(p*(1-p)/R.nsim);
+          return `${c.parsed.y.toFixed(1)}% (95% CI ± ${h.toFixed(1)} pp)`;}}}}}});
+}
+
+/* ================= init ================= */
+renderNav();renderForm();
+</script>
+</body>
+</html>

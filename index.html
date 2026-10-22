@@ -293,6 +293,11 @@ function powOR(n1,P){
   const se=Math.sqrt(1/(n1*p1*(1-p1))+1/(n2*p2*(1-p2)));
   return pnorm(Math.abs(Math.log(P.or))/se-za);
 }
+function powRR(n1,P){
+  const n2=n1*P.ratio, za=zAlpha(P), p1=P.p1, p2=P.p2;
+  const se=Math.sqrt((1-p1)/(n1*p1)+(1-p2)/(n2*p2));
+  return pnorm(Math.abs(Math.log(P.rr))/se-za);
+}
 function hrEventProb(lam,a,f){ if(lam<=0)return 0; return 1-(Math.exp(-lam*f)-Math.exp(-lam*(a+f)))/(lam*a); }
 function powHR(n1,P){
   const n2=n1*P.ratio, za=zAlpha(P);
@@ -344,6 +349,14 @@ function inv3diag(A){ // diagonal of inverse of sym 3x3
   if(Math.abs(det)<1e-12)return null;
   return [(d*f-e*e)/det,(a*f-c*c)/det,(a*d-b*b)/det];
 }
+function inv3(A){ // full inverse of 3x3
+  const [[a,b,c],[d,e,f],[g,h,k]]=A;
+  const det=a*(e*k-f*h)-b*(d*k-f*g)+c*(d*h-e*g);
+  if(Math.abs(det)<1e-12)return null;
+  return [[(e*k-f*h)/det,(c*h-b*k)/det,(b*f-c*e)/det],
+          [(f*g-d*k)/det,(a*k-c*g)/det,(c*d-a*f)/det],
+          [(d*h-e*g)/det,(b*g-a*h)/det,(a*e-b*d)/det]];
+}
 function olsTest(y,g,x,n,P){ // fit y~1+g+x, return {tU:null,tA} style: t stat for g and df
   let s1=n,sg=0,sx=0,sgg=0,sgx=0,sxx=0,sy=0,sgy=0,sxy=0;
   for(let i=0;i<n;i++){sg+=g[i];sx+=x[i];sgg+=g[i]*g[i];sgx+=g[i]*x[i];sxx+=x[i]*x[i];
@@ -374,6 +387,30 @@ function logisticTest(y,g,x,n){ // IRLS y~1+g+x, Wald on g
       return {z:b1/Math.sqrt(dinv[1])};
     }
     if(it===11){const dinv=inv3diag(S);if(!dinv)return null;return {z:b1/Math.sqrt(dinv[1])};}
+  }
+  return null;
+}
+function modPoissonTest(y,g,x,n){ // log-link Poisson y~1+g+x with robust (sandwich) SE — Zou 2004
+  let b=[Math.log(Math.max(1e-3,y.reduce((s,v)=>s+v,0)/n)),0,0];
+  for(let it=0;it<25;it++){
+    const A=[[0,0,0],[0,0,0],[0,0,0]],U=[0,0,0];
+    for(let i=0;i<n;i++){
+      const v=[1,g[i],x[i]],mu=Math.exp(Math.max(-30,Math.min(30,b[0]+b[1]*g[i]+b[2]*x[i])));
+      for(let a2=0;a2<3;a2++){U[a2]+=(y[i]-mu)*v[a2];for(let c2=0;c2<3;c2++)A[a2][c2]+=mu*v[a2]*v[c2];}
+    }
+    const d=solve3(A,U); if(!d)return null;
+    b=[b[0]+d[0],b[1]+d[1],b[2]+d[2]];
+    if(Math.abs(b[1])>15)return null; // separation guard
+    if(Math.abs(d[0])+Math.abs(d[1])+Math.abs(d[2])<1e-8||it===24){
+      const Bm=[[0,0,0],[0,0,0],[0,0,0]],Am=[[0,0,0],[0,0,0],[0,0,0]];
+      for(let i=0;i<n;i++){
+        const v=[1,g[i],x[i]],mu=Math.exp(Math.max(-30,Math.min(30,b[0]+b[1]*g[i]+b[2]*x[i]))),r2=(y[i]-mu)**2;
+        for(let a2=0;a2<3;a2++)for(let c2=0;c2<3;c2++){Am[a2][c2]+=mu*v[a2]*v[c2];Bm[a2][c2]+=r2*v[a2]*v[c2];}
+      }
+      const Ai=inv3(Am); if(!Ai)return null;
+      let vb=0; for(let a2=0;a2<3;a2++)for(let c2=0;c2<3;c2++)vb+=Ai[1][a2]*Bm[a2][c2]*Ai[c2][1];
+      return vb>0?{z:b[1]/Math.sqrt(vb)}:null;
+    }
   }
   return null;
 }
@@ -478,7 +515,7 @@ function simContinuous(P,n1,n2,rng){
   }
   return {rejU,rejA};
 }
-function simBinaryLike(P,n1,n2,rng,useOR){
+function simBinaryLike(P,n1,n2,rng,mode){ // mode: 'rd' | 'or' | 'rr'
   const n=n1+n2, cov=P.covOn, rho=cov?P.rho:0, s1r=Math.sqrt(1-rho*rho);
   const zp1=qnorm(P.p1), zp2=qnorm(P.p2);
   let a=0,c=0; // events in control (a) and treatment (c)
@@ -492,7 +529,12 @@ function simBinaryLike(P,n1,n2,rng,useOR){
   }
   const p1h=a/n1,p2h=c/n2;
   let rejU=0;
-  if(useOR){
+  if(mode==='rr'){
+    let A=a,C=c,m1=n1,m2=n2;
+    if(A===0||C===0||A===n1||C===n2){A+=.5;C+=.5;m1+=1;m2+=1;}
+    const lnrr=Math.log((C/m2)/(A/m1)), serr=Math.sqrt(1/A-1/m1+1/C-1/m2);
+    rejU=(Math.abs(lnrr/serr)>qnorm(1-P.alpha/2))?1:0;
+  }else if(mode==='or'){
     let A=a,B=n1-a,C=c,D=n2-c;
     if(A===0||B===0||C===0||D===0){A+=.5;B+=.5;C+=.5;D+=.5;}
     const lnor=Math.log((C*B)/(A*D)), seor=Math.sqrt(1/A+1/B+1/C+1/D);
@@ -506,7 +548,7 @@ function simBinaryLike(P,n1,n2,rng,useOR){
   }
   let rejA=null;
   if(cov){
-    const r=logisticTest(y,g,x,n);
+    const r=mode==='rr'?modPoissonTest(y,g,x,n):logisticTest(y,g,x,n);
     rejA=r?((Math.abs(r.z)>qnorm(1-P.alpha/2))?1:0):0;
   }
   return {rejU,rejA};
@@ -557,9 +599,9 @@ function simCount(P,n1,n2,rng){
   const rejU=(se>0&&Math.abs(Math.log(m2/m1))/se>qnorm(1-P.alpha/2))?1:0;
   return {rejU,rejA:null};
 }
-const SIMFN={cont:simContinuous,bin:(P,a,b,r)=>simBinaryLike(P,a,b,r,false),or:(P,a,b,r)=>simBinaryLike(P,a,b,r,true),hr:simHR,rmst:simRMST,count:simCount};
-const POWFN={cont:powContinuous,bin:powBinary,or:powOR,hr:powHR,rmst:powRMST,count:powCount};
-const SIMCHUNK={cont:200,bin:120,or:120,hr:40,rmst:60,count:150};
+const SIMFN={cont:simContinuous,bin:(P,a,b,r)=>simBinaryLike(P,a,b,r,'rd'),or:(P,a,b,r)=>simBinaryLike(P,a,b,r,'or'),rr:(P,a,b,r)=>simBinaryLike(P,a,b,r,'rr'),hr:simHR,rmst:simRMST,count:simCount};
+const POWFN={cont:powContinuous,bin:powBinary,or:powOR,rr:powRR,hr:powHR,rmst:powRMST,count:powCount};
+const SIMCHUNK={cont:200,bin:120,or:120,rr:120,hr:40,rmst:60,count:150};
 
 const tick=()=>new Promise(r=>setTimeout(r,0));
 async function runSimBatch(P,n1,n2,nsim,seed,onProg){
@@ -607,6 +649,7 @@ const G={
 cont:'<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M1 17c4 0 5-13 9-13s5 13 9 13" stroke="#79C9EC" stroke-width="1.7" stroke-linecap="round"/></svg>',
 bin:'<svg width="20" height="20" viewBox="0 0 20 20"><circle cx="6" cy="10" r="4.4" fill="#79C9EC"/><circle cx="14.6" cy="10" r="4.4" fill="none" stroke="#EEBD6A" stroke-width="1.7"/></svg>',
 or:'<svg width="20" height="20" viewBox="0 0 20 20"><rect x="2" y="2" width="7" height="7" rx="1.5" fill="#79C9EC"/><rect x="11" y="2" width="7" height="7" rx="1.5" fill="none" stroke="#EEBD6A" stroke-width="1.6"/><rect x="2" y="11" width="7" height="7" rx="1.5" fill="none" stroke="#79C9EC" stroke-width="1.6"/><rect x="11" y="11" width="7" height="7" rx="1.5" fill="#EEBD6A"/></svg>',
+rr:'<svg width="20" height="20" viewBox="0 0 20 20"><rect x="3" y="9" width="5.5" height="9" rx="1.5" fill="#79C9EC"/><rect x="11.5" y="3" width="5.5" height="15" rx="1.5" fill="none" stroke="#EEBD6A" stroke-width="1.6"/></svg>',
 hr:'<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M2 3h5v4h4v5h4v5h3" stroke="#79C9EC" stroke-width="1.7"/><path d="M2 3h3v7h5v6h8" stroke="#EEBD6A" stroke-width="1.7" stroke-dasharray="3 2"/></svg>',
 rmst:'<svg width="20" height="20" viewBox="0 0 20 20"><path d="M2 4h5v4h4v5h4v4H2z" fill="#EEBD6A" opacity=".25"/><path d="M2 4h5v4h4v5h4v4" stroke="#D9A24E" stroke-width="1.7" fill="none"/></svg>',
 count:'<svg width="20" height="20" viewBox="0 0 20 20" fill="#79C9EC"><circle cx="4" cy="15" r="1.8"/><circle cx="9" cy="7" r="1.8"/><circle cx="12" cy="13" r="1.8" fill="#EEBD6A"/><circle cx="16" cy="5" r="1.8" fill="#EEBD6A"/><circle cx="6" cy="4" r="1.8"/><circle cx="16" cy="16" r="1.8" fill="#EEBD6A"/></svg>'
@@ -627,6 +670,10 @@ const OUT=[
  fields:[
   {id:'p1',lab:'Control proportion',hint:'p₁',v:0.30,step:0.01,min:0.001,max:0.999},
   {id:'or',lab:'Odds ratio',hint:'treatment vs control',v:2.0,step:0.1,min:1e-6}]},
+{id:'rr',name:'Relative risk',sub:'Risk ratio (log-binomial)',glyph:G.rr,ni:false,cov:true,
+ fields:[
+  {id:'p1',lab:'Control proportion',hint:'p₁ (risk)',v:0.30,step:0.01,min:0.001,max:0.999},
+  {id:'rr',lab:'Relative risk',hint:'treatment vs control',v:1.5,step:0.1,min:1e-6}]},
 {id:'hr',name:'Hazard ratio',sub:'Log-rank / Cox (Schoenfeld)',glyph:G.hr,ni:false,cov:true,
  fields:[
   {id:'hr',lab:'Hazard ratio',hint:'treatment vs control',v:0.70,step:0.05,min:1e-6},
@@ -776,6 +823,12 @@ function buildParams(){
     bad(!(P.or>0)||P.or===1,'OR must be positive and ≠ 1.');
     if(P.or>0)P.p2=P.or*P.p1/(1-P.p1+P.or*P.p1);
   }
+  if(o.id==='rr'){
+    bad(!(P.p1>0&&P.p1<1),'Control proportion must be in (0,1).');
+    bad(!(P.rr>0)||P.rr===1,'RR must be positive and ≠ 1.');
+    P.p2=P.rr*P.p1;
+    bad(P.rr>0&&!(P.p2<1),`RR × p₁ = ${fmt(P.p2)} — the implied treatment risk must be below 1.`);
+  }
   if(o.id==='hr'){
     bad(!(P.hr>0)||P.hr===1,'HR must be positive and ≠ 1.');
     bad(!(P.med1>0&&P.acc>0&&P.fup>=0),'Median and study periods must be positive.');
@@ -793,7 +846,7 @@ function buildParams(){
   return {P,o,errs,warns};
 }
 function postWarnings(P,o,n1,n2,warns){
-  if(o.id==='bin'||o.id==='or'){
+  if(o.id==='bin'||o.id==='or'||o.id==='rr'){
     const m=Math.min(n1*P.p1,n1*(1-P.p1),n2*P.p2,n2*(1-P.p2));
     if(m<5)warns.push('Expected cell count below 5 — normal-approximation results are unreliable here; prefer simulation (exact behaviour of the test is captured empirically).');
   }
@@ -813,6 +866,7 @@ function formulaStrip(P,o,R){
       ?`n₁ = (${zaSym}+z₁₋β)²·[p₁q₁ + p₂q₂/r] / (Δ+m)²  with  Δ+m = ${fmt((P.p2-P.p1)+P.margin)}  →  <b>n₁ = ${R.n1}</b>`
       :`n₁ = [ ${zaSym}√((1+1/r)·p̄q̄) + z₁₋β√(p₁q₁+p₂q₂/r) ]² / (p₁−p₂)²  with  p̄ = ${fmt((P.p1+P.ratio*P.p2)/(1+P.ratio))}  →  <b>n₁ = ${R.n1}</b>`;
     case 'or':return `n₁ = (${zaSym}+z₁₋β)²·[1/(p₁q₁) + 1/(r·p₂q₂)] / ln²(OR)  with  p₂ = ${fmt(P.p2)} (from OR·odds₁),  ln OR = ${fmt(Math.log(P.or))}  →  <b>n₁ = ${R.n1}</b>`;
+    case 'rr':return `n₁ = (${zaSym}+z₁₋β)²·[q₁/p₁ + q₂/(r·p₂)] / ln²(RR)  with  p₂ = ${fmt(P.p2)} (= RR·p₁),  ln RR = ${fmt(Math.log(P.rr))}  →  <b>n₁ = ${R.n1}</b>`;
     case 'hr':{const l1=Math.LN2/P.med1;
       return `Schoenfeld:  D = (${zaSym}+z₁₋β)² / (π₁π₂·ln²HR) = <b>${Math.ceil(R.D)}</b> events;   N = D / (π₁P₁+π₂P₂)  with  P₁ = ${fmt(hrEventProb(l1,P.acc,P.fup))},  P₂ = ${fmt(hrEventProb(l1*P.hr,P.acc,P.fup))}`;}
     case 'rmst':return `n₁ = (${zaSym}+z₁₋β)²·(v₁ + v₂/r) / Δμ²  with  Δμ(τ=${P.tau}) = ${fmt(R.effRMST)},  v = ∫₀^τ m(t)²·λ dt / (S·G)  (exponential model, uniform accrual)`;
@@ -827,6 +881,8 @@ bin:`<p><strong>Formula.</strong> Two-proportion z-test with the pooled-variance
 <p><strong>Simulation.</strong> Outcomes are generated from a latent-probit model: Y = 1 if ρX + √(1−ρ²)Z falls below Φ⁻¹(p<sub>arm</sub>), so ρ is the latent-scale (biserial) correlation between covariate and outcome — the observable point-biserial correlation is smaller. Adjusted analysis is logistic regression (Wald test on the arm coefficient). Note the gain from adjustment is smaller than for continuous outcomes and works through non-collapsibility: adjustment moves the OR away from 1 rather than shrinking the SE.</p>`,
 or:`<p><strong>Formula.</strong> Wald test on log OR; p₂ is derived from the control proportion and the OR. Sample size uses Var(ln OR) ≈ 1/(n₁p₁q₁) + 1/(n₂p₂q₂).</p>
 <p><strong>Simulation.</strong> Same latent-probit generation as the binary outcome; unadjusted analysis is the 2×2 Wald log-OR (with a 0.5 continuity correction if a cell is empty), adjusted analysis is logistic regression. The conditional (adjusted) OR is larger in magnitude than the marginal OR — non-collapsibility — so power can change even though the covariate is balanced by randomisation.</p>`,
+rr:`<p><strong>Formula.</strong> Wald test on log RR; p₂ = RR·p₁ (must be below 1). Sample size uses the delta-method variance Var(ln RR) ≈ q₁/(n₁p₁) + q₂/(n₂p₂).</p>
+<p><strong>Simulation.</strong> Same latent-probit generation as the binary outcome; unadjusted analysis is the 2×2 Wald log-RR (0.5 added to each event count and 1 to each arm size if any arm has zero or all events), adjusted analysis is modified Poisson regression — log link with a robust sandwich variance (Zou 2004), which avoids the convergence failures of log-binomial models. Unlike the OR, the RR is collapsible, so adjustment works mainly through variance reduction; under the latent-probit model the covariate-conditional RR is not exactly constant, so treat the adjusted power as indicative.</p>`,
 hr:`<p><strong>Formula.</strong> Schoenfeld's events formula D = (z<sub>1−α/2</sub>+z<sub>1−β</sub>)²/(π₁π₂ ln²HR), converted to N via event probabilities under exponential survival, uniform accrual over the accrual period, and administrative censoring at accrual + follow-up.</p>
 <p><strong>Simulation.</strong> Exponential event times with staggered entry; unadjusted analysis is the log-rank test, adjusted analysis a two-covariate Cox model (Breslow ties, Newton–Raphson). The covariate acts multiplicatively on the hazard with coefficient calibrated so that corr(X, log T) = ρ; the entered HR is the covariate-conditional HR, so the unadjusted (marginal) HR is attenuated toward 1 — this is why the adjusted Cox analysis can be visibly more powerful.</p>`,
 rmst:`<p><strong>Formula.</strong> Difference in restricted mean survival time to τ under exponential survival. The asymptotic variance of the KM-based RMST, ∫₀^τ [∫<sub>t</sub>^τ S]² dΛ/(S·G), is integrated numerically with G(t) the censoring survival implied by uniform accrual plus administrative censoring.</p>
@@ -899,6 +955,7 @@ function effectSummary(P,o){
     case 'cont':return {lab:'Standardised effect',val:fmt(Math.abs(P.mu2-P.mu1)/P.sd,2)+'<small> δ</small>'};
     case 'bin':return {lab:'Risk difference',val:fmt(P.p2-P.p1,3)};
     case 'or':return {lab:'p₂ implied by OR',val:fmt(P.p2,3)};
+    case 'rr':return {lab:'p₂ implied by RR',val:fmt(P.p2,3)};
     case 'hr':return {lab:'Hazard ratio',val:fmt(P.hr,2)};
     case 'rmst':return {lab:'ΔRMST at τ',val:''};
     case 'count':return {lab:'Rate ratio',val:fmt(P.rr,2)};
